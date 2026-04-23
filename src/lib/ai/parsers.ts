@@ -23,16 +23,9 @@ function asString(value: unknown, fallback = ""): string {
 
 function cleanText(value: string): string {
   return value
-    .replace(/
-/g, "
-")
-    .replace(/[ 	]+
-/g, "
-")
-    .replace(/
-{3,}/g, "
-
-")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
