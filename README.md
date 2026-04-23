@@ -13,7 +13,7 @@ The current demo uses a **mock Arc adapter** for safety and stage reliability, w
 
 ## Live product
 
-- Landing page: deployed on Vercel after import
+- Landing page: https://arc-task-rohan-santhoshs-projects.vercel.app
 - Dashboard: `/dashboard`
 - GitHub repo: https://github.com/Rohan5commit/arc-task
 
@@ -145,10 +145,11 @@ Then open http://localhost:3000.
 ## Deployment
 
 ### Vercel
-1. Import `Rohan5commit/arc-task` into Vercel.
+1. Create the Vercel project.
 2. Set the environment variables from `.env.example`.
-3. Deploy the `main` branch.
-4. Verify:
+3. Disable SSO deployment protection if you want a public hackathon demo.
+4. Deploy the latest `main` commit.
+5. Verify:
    - `/`
    - `/dashboard`
    - `POST /api/plan`
