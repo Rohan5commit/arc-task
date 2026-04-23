@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { GoalComposer } from "@/components/dashboard/goal-composer";
 import { LedgerPanel } from "@/components/dashboard/ledger-panel";
@@ -8,10 +8,15 @@ import { StatCard } from "@/components/dashboard/stat-card";
 import { TaskCard } from "@/components/dashboard/task-card";
 import { WalletPanel } from "@/components/dashboard/wallet-panel";
 import { Panel } from "@/components/ui/panel";
-import { seedWorkspaces, getSeedWorkspace } from "@/lib/demo/seed-workspaces";
-import { createPaymentAdapter } from "@/lib/payments/create-adapter";
+import { getSeedWorkspace, seedWorkspaces } from "@/lib/demo/seed-workspaces";
+import {
+  clearDashboardState,
+  loadDashboardState,
+  saveDashboardState
+} from "@/lib/demo/persistence";
 import type {
   PlanningApiResponse,
+  PayoutApiResponse,
   TaskItem,
   TaskOutputApiResponse,
   VerificationDecision,
@@ -33,6 +38,28 @@ interface DashboardShellProps {
   initialWorkspace: Workspace;
 }
 
+const DEFAULT_RUNTIME_LABEL =
+  "Loaded seeded workspace. AI outputs and payouts below are safe demo suggestions.";
+
+async function readApiError(response: Response, fallback: string): Promise<string> {
+  const text = await response.text();
+
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as { error?: string };
+    return parsed.error || fallback;
+  } catch {
+    return text;
+  }
+}
+
+function buildWarningSuffix(warnings: string[]): string {
+  return warnings.length ? ` · note: ${warnings[0].slice(0, 120)}` : "";
+}
+
 export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
   const [workspace, setWorkspace] = useState<Workspace>(() => structuredClone(initialWorkspace));
   const [goalDraft, setGoalDraft] = useState(initialWorkspace.goal);
@@ -40,11 +67,30 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
   const [planError, setPlanError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
-  const [runtimeLabel, setRuntimeLabel] = useState(
-    "Loaded seeded workspace. AI outputs and payouts below are safe demo suggestions."
-  );
+  const [runtimeLabel, setRuntimeLabel] = useState(DEFAULT_RUNTIME_LABEL);
+  const [hasHydratedState, setHasHydratedState] = useState(false);
 
   const groupedTasks = useMemo(() => groupTasksByStatus(workspace.tasks), [workspace.tasks]);
+
+  useEffect(() => {
+    const persisted = loadDashboardState();
+
+    if (persisted) {
+      setWorkspace(persisted.workspace);
+      setGoalDraft(persisted.workspace.goal);
+      setRuntimeLabel(persisted.runtimeLabel || DEFAULT_RUNTIME_LABEL);
+    }
+
+    setHasHydratedState(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedState) {
+      return;
+    }
+
+    saveDashboardState({ workspace, runtimeLabel });
+  }, [hasHydratedState, runtimeLabel, workspace]);
 
   function loadSeedWorkspace(id: string) {
     const nextWorkspace = getSeedWorkspace(id);
@@ -53,6 +99,17 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
     setPlanError(null);
     setActionError(null);
     setRuntimeLabel("Loaded seeded demo workspace. You can keep iterating or create a new goal.");
+  }
+
+  function resetDemoState() {
+    clearDashboardState();
+    const nextWorkspace = getSeedWorkspace("workspace-market");
+    setWorkspace(nextWorkspace);
+    setGoalDraft(nextWorkspace.goal);
+    setPlanError(null);
+    setActionError(null);
+    setBusyTaskId(null);
+    setRuntimeLabel("Reset to the default research demo workspace.");
   }
 
   async function handlePlanGoal() {
@@ -72,17 +129,14 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, "Planning failed."));
       }
 
       const payload = (await response.json()) as PlanningApiResponse;
       setWorkspace(payload.workspace);
       setGoalDraft(payload.workspace.goal);
-      const warningSuffix = payload.warnings.length
-        ? ` · note: ${payload.warnings[0].slice(0, 120)}`
-        : "";
       setRuntimeLabel(
-        `Planner source: ${payload.source === "llm" ? "live NVIDIA NIM" : "deterministic fallback"} · model: ${payload.model}${warningSuffix}`
+        `Planner source: ${payload.source === "llm" ? "live NVIDIA NIM" : "deterministic fallback"} · model: ${payload.model}${buildWarningSuffix(payload.warnings)}`
       );
     } catch (error) {
       setPlanError(error instanceof Error ? error.message : "Planning failed.");
@@ -128,7 +182,7 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, "Failed to generate output."));
       }
 
       const payload = (await response.json()) as TaskOutputApiResponse;
@@ -147,7 +201,9 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
           )
         )
       );
-      setRuntimeLabel(`Latest worker output model: ${payload.model}`);
+      setRuntimeLabel(
+        `Latest worker output model: ${payload.model} · source: ${payload.output.source}${buildWarningSuffix(payload.warnings)}`
+      );
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Failed to generate output.");
     } finally {
@@ -179,7 +235,7 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
       });
 
       if (!response.ok) {
-        throw new Error(await response.text());
+        throw new Error(await readApiError(response, "Verification failed."));
       }
 
       const payload = (await response.json()) as VerifyApiResponse;
@@ -192,13 +248,17 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
           })),
           createActivity(
             "verifier",
-            payload.verification.decision === "approved" ? "Verifier approved output" : "Verifier requested changes",
+            payload.verification.decision === "approved"
+              ? "Verifier approved output"
+              : "Verifier requested changes",
             payload.verification.notes,
             payload.verification.decision === "approved" ? "success" : "warning"
           )
         )
       );
-      setRuntimeLabel(`Latest verification model: ${payload.model}`);
+      setRuntimeLabel(
+        `Latest verification model: ${payload.model} · source: ${payload.verification.source}${buildWarningSuffix(payload.warnings)}`
+      );
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Verification failed.");
     } finally {
@@ -217,11 +277,22 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
     }
 
     try {
-      const adapter = createPaymentAdapter(workspace.paymentMode);
-      const receipt = await adapter.settleTaskPayout({
-        task,
-        payee: task.assignedTo
+      const response = await fetch("/api/payout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          task,
+          payee: task.assignedTo
+        })
       });
+
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "Payment failed."));
+      }
+
+      const payload = (await response.json()) as PayoutApiResponse;
 
       setWorkspace((current) => {
         const withPaidTask = upsertTask(current, taskId, (item) => ({
@@ -234,26 +305,29 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
           taskId,
           taskTitle: task.title,
           payee: task.assignedTo,
-          amountUsdc: receipt.amountUsdc,
-          adapter: receipt.adapter,
-          status: receipt.status,
-          txHash: receipt.txHash,
-          memo: receipt.memo,
-          createdAt: receipt.settledAt,
-          explorerUrl: receipt.explorerUrl
+          amountUsdc: payload.receipt.amountUsdc,
+          adapter: payload.receipt.adapter,
+          status: payload.receipt.status,
+          txHash: payload.receipt.txHash,
+          memo: payload.receipt.memo,
+          createdAt: payload.receipt.settledAt,
+          isMock: payload.receipt.isMock,
+          explorerUrl: payload.receipt.explorerUrl
         });
 
         return appendActivity(
           withLedger,
           createActivity(
             "payment",
-            "Nano-payment settled",
-            `${task.assignedTo} received ${receipt.amountUsdc.toFixed(4)} USDC via ${adapter.label}.`,
+            payload.receipt.isMock ? "Demo nano-payment settled" : "Nano-payment settled",
+            `${task.assignedTo} received ${payload.receipt.amountUsdc.toFixed(4)} USDC via a server-side ${payload.receipt.isMock ? "mock" : "onchain"} payout flow.`,
             "success"
           )
         );
       });
-      setRuntimeLabel("Payout settled on the demo Arc adapter. Receipt stored in the ledger.");
+      setRuntimeLabel(
+        `${payload.receipt.isMock ? "Server-side demo receipt settled" : "Server-side payout settled"}.${buildWarningSuffix(payload.warnings)}`
+      );
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Payment failed.");
     } finally {
@@ -296,6 +370,7 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
         onGoalChange={setGoalDraft}
         onPlanGoal={handlePlanGoal}
         onLoadSeed={loadSeedWorkspace}
+        onResetDemo={resetDemoState}
       />
 
       <div className="rounded-3xl border border-cyan-400/10 bg-cyan-400/8 px-5 py-4 text-sm text-cyan-50/90">
@@ -358,7 +433,7 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
             </div>
           ) : (
             <div className="overflow-x-auto pb-2">
-              <div className="grid min-w-[1100px] gap-4 xl:min-w-0 xl:grid-cols-3 2xl:grid-cols-6">
+              <div className="grid min-w-[960px] gap-4 xl:min-w-0 xl:grid-cols-3 2xl:grid-cols-6">
                 {STATUS_COLUMNS.map((status) => (
                   <div key={status} className="space-y-3">
                     <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/4 px-3 py-2">

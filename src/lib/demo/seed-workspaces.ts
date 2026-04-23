@@ -100,9 +100,9 @@ const marketResearchWorkspace: Workspace = reconcileWorkspace({
       adapter: "demo",
       status: "settled",
       txHash: "0xd4c4fdcebb6d7452f620fa6bc476a130f9a9aa9fe2b640d4b6d19b6fd1f2c032",
-      memo: "ArcTask nano-payment for Define competitor scope",
+      memo: "ArcTask demo nano-payment receipt for Define competitor scope",
       createdAt: "2026-04-23T07:16:00.000Z",
-      explorerUrl: "https://testnet.arcscan.app/tx/0xd4c4fdcebb6d7452f620fa6bc476a130f9a9aa9fe2b640d4b6d19b6fd1f2c032?demo=1"
+      isMock: true
     }
   ],
   activity: [

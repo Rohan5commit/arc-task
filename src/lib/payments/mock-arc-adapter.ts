@@ -1,5 +1,6 @@
 import type { PaymentAdapter } from "@/lib/payments/adapter";
-import type { PaymentSettlementInput, PaymentReceipt } from "@/lib/payments/adapter";
+import type { PaymentSettlementInput } from "@/lib/payments/adapter";
+import type { PaymentReceipt } from "@/lib/types";
 import { createMockTxHash } from "@/lib/utils/ids";
 
 export class MockArcAdapter implements PaymentAdapter {
@@ -14,10 +15,10 @@ export class MockArcAdapter implements PaymentAdapter {
       status: "settled",
       txHash,
       amountUsdc: Number(input.task.bountyUsdc.toFixed(4)),
-      memo: `ArcTask nano-payment for ${input.task.title}`,
+      memo: `ArcTask demo nano-payment receipt for ${input.task.title}`,
       settledAt: new Date().toISOString(),
       networkLabel: "Arc Testnet (demo mode)",
-      explorerUrl: `https://testnet.arcscan.app/tx/${txHash}?demo=1`
+      isMock: true
     };
   }
 }

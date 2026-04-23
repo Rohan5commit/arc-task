@@ -27,8 +27,8 @@ export function WalletPanel({ wallet }: { wallet: WalletState }) {
           <p className="mt-2 font-mono text-sm text-slate-100">{shortAddress(wallet.address)}</p>
         </div>
         <p className="text-xs text-slate-500">
-          Demo mode uses a mock Arc adapter that emits realistic receipt metadata. Swap the adapter
-          for a signer-backed testnet implementation when ready.
+          Demo mode settles payouts through a server route and emits clearly labeled mock receipts.
+          Swap the adapter for a signer-backed testnet implementation when ready.
         </p>
       </div>
     </Panel>

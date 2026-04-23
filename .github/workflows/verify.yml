@@ -9,7 +9,7 @@ on:
 jobs:
   app:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -20,11 +20,32 @@ jobs:
         with:
           node-version: 20
 
+      - name: Generate package lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck
         run: npm run typecheck
 
       - name: Build
         run: npm run build
+
+      - name: Start app
+        run: npm run start > /tmp/arc-task.log 2>&1 &
+        env:
+          PORT: 3000
+          PAYMENT_MODE: demo
+          NEXT_PUBLIC_PAYMENT_MODE: demo
+
+      - name: API smoke
+        run: npm run smoke
+        env:
+          SMOKE_BASE_URL: http://127.0.0.1:3000
+          PAYMENT_MODE: demo
+          NEXT_PUBLIC_PAYMENT_MODE: demo
+
+      - name: Print server log on failure
+        if: failure()
+        run: cat /tmp/arc-task.log

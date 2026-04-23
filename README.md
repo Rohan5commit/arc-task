@@ -9,7 +9,7 @@ The product shows how a goal can become:
 4. verifier approvals,
 5. payout ledger receipts on an Arc-ready payment rail.
 
-The current demo uses a **mock Arc adapter** for safety and stage reliability, while keeping a clean seam for future Arc testnet settlement.
+The current demo uses a **mock Arc adapter** for safety and stage reliability, while keeping a clean seam for future Arc testnet settlement. Payout release now runs through a server route so the payment story is not client-only.
 
 ## Live product
 
@@ -44,6 +44,7 @@ ArcTask turns those chain properties into a product demo that judges can underst
 - auth-free dashboard
 - task board by status
 - payout ledger
+- browser-persisted demo state
 - wallet panel
 - activity feed
 - responsive layout
@@ -63,6 +64,8 @@ ArcTask turns those chain properties into a product demo that judges can underst
 - demo wallet balances
 - nano-payment receipts
 - mock Arc adapter
+- server-side payout route for demo settlement
+- explicit mock/onchain receipt labeling
 - Arc testnet adapter interface stub
 - docs for real Arc integration
 
@@ -198,5 +201,7 @@ Short version:
 
 - The app clearly labels AI-generated suggestions.
 - The live AI path is bounded by route-specific latency budgets so the demo falls back quickly instead of hanging on stage.
+- Dashboard state persists in the browser so a page refresh does not erase the current demo flow.
+- Demo receipts are clearly labeled mock receipts and are settled through a server route, not directly in the client.
 - Demo mode is intentional. It makes the product reliable for live judging while preserving a real path to Arc settlement.
 - No secrets should be committed. Configure the NVIDIA key only in Vercel project settings or local env files.

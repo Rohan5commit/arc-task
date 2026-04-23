@@ -14,6 +14,7 @@ interface GoalComposerProps {
   onGoalChange(value: string): void;
   onPlanGoal(): void;
   onLoadSeed(id: string): void;
+  onResetDemo(): void;
 }
 
 export function GoalComposer({
@@ -22,7 +23,8 @@ export function GoalComposer({
   error,
   onGoalChange,
   onPlanGoal,
-  onLoadSeed
+  onLoadSeed,
+  onResetDemo
 }: GoalComposerProps) {
   return (
     <Panel
@@ -64,7 +66,13 @@ export function GoalComposer({
             <Button variant="secondary" onClick={() => onLoadSeed("workspace-meme")}>
               Load campaign demo
             </Button>
+            <Button variant="ghost" onClick={onResetDemo}>
+              Reset demo state
+            </Button>
           </div>
+          <p className="text-xs text-slate-500">
+            Browser refreshes now keep your latest demo state until you reset it.
+          </p>
           {error ? (
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
               {error}

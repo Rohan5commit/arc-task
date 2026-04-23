@@ -6,7 +6,7 @@ ArcTask is a stateless web app optimized for live demo reliability.
 
 - **Frontend**: Next.js App Router UI for landing page and dashboard
 - **AI layer**: server routes calling NVIDIA NIM with JSON-only prompts
-- **Workflow state**: in-memory client state plus seeded demo workspaces
+- **Workflow state**: client state persisted in-browser plus seeded demo workspaces
 - **Payment layer**: adapter interface with mock Arc receipt generation
 - **Deployment**: Vercel
 - **Verification**: GitHub Actions build + typecheck
@@ -29,8 +29,9 @@ Client-side orchestration for:
 - `POST /api/plan`: decompose goal into tasks with nano-bounties
 - `POST /api/task-output`: generate a worker output for a task
 - `POST /api/verify`: generate verification notes for approve/reject actions
+- `POST /api/payout`: settle a server-side demo payout receipt
 
-All routes try live NVIDIA NIM first, but each route now runs inside a bounded latency budget and falls back to deterministic local logic if the live model is too slow.
+All routes validate request shape up front, try live NVIDIA NIM first where relevant, and fall back to deterministic local logic if the live model is too slow.
 
 ### 4. Payment adapter seam
 `PaymentAdapter` defines the interface for settlement.
@@ -47,6 +48,7 @@ Two ready-to-demo workspaces:
 - no auth friction
 - no database dependency
 - no fragile blockchain coupling in the live path
+- refresh-safe browser persistence for demo continuity
 - still clearly aligned with Arc
 - easy to explain
 - easy to deploy

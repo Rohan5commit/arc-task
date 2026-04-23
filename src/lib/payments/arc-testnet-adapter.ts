@@ -1,4 +1,5 @@
-import type { PaymentAdapter, PaymentSettlementInput, PaymentReceipt } from "@/lib/payments/adapter";
+import type { PaymentAdapter, PaymentSettlementInput } from "@/lib/payments/adapter";
+import type { PaymentReceipt } from "@/lib/types";
 
 export class ArcTestnetAdapter implements PaymentAdapter {
   mode = "arc_testnet" as const;

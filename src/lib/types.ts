@@ -78,6 +78,19 @@ export interface LedgerEntry {
   txHash: string;
   memo: string;
   createdAt: string;
+  isMock: boolean;
+  explorerUrl?: string;
+}
+
+export interface PaymentReceipt {
+  adapter: PaymentMode;
+  status: LedgerStatus;
+  txHash: string;
+  amountUsdc: number;
+  memo: string;
+  settledAt: string;
+  networkLabel: string;
+  isMock: boolean;
   explorerUrl?: string;
 }
 
@@ -139,10 +152,18 @@ export interface TaskOutputApiResponse {
   taskId: string;
   output: TaskOutput;
   model: string;
+  warnings: string[];
 }
 
 export interface VerifyApiResponse {
   taskId: string;
   verification: VerificationRecord;
   model: string;
+  warnings: string[];
+}
+
+export interface PayoutApiResponse {
+  taskId: string;
+  receipt: PaymentReceipt;
+  warnings: string[];
 }

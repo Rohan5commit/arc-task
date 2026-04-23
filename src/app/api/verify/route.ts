@@ -3,40 +3,56 @@ import { createFallbackVerification } from "@/lib/ai/fallback-planner";
 import { completeWithNim } from "@/lib/ai/nim-client";
 import { extractJsonObject, normalizeVerification } from "@/lib/ai/parsers";
 import { buildVerificationMessages } from "@/lib/ai/prompts";
-import type { TaskItem, VerificationDecision, VerificationRecord } from "@/lib/types";
-import { sanitizeGoal } from "@/lib/utils/task-helpers";
+import { parseVerificationPayload, readJsonBody } from "@/lib/api/schemas";
+import type { VerificationRecord, VerifyApiResponse } from "@/lib/types";
 
 const DEFAULT_VERIFIER_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
 const DEFAULT_VERIFIER_TIMEOUT_MS = 7000;
 
+function buildVerifierWarning(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+
+  if (message.startsWith("NVIDIA NIM request timed out")) {
+    return message;
+  }
+
+  return "Live verifier unavailable. Returned deterministic fallback review note.";
+}
+
 export async function POST(request: Request) {
+  const body = await readJsonBody(request);
+
+  if (!body.ok) {
+    return NextResponse.json({ error: body.error }, { status: body.status });
+  }
+
+  const parsed = parseVerificationPayload(body.data);
+
+  if (!parsed.ok) {
+    return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+  }
+
   try {
-    const payload = (await request.json()) as {
-      goal?: string;
-      task?: TaskItem;
-      decisionIntent?: VerificationDecision;
-    };
-    const goal = sanitizeGoal(String(payload.goal ?? ""));
-    const task = payload.task;
-    const decisionIntent =
-      payload.decisionIntent === "changes_requested" ? "changes_requested" : "approved";
-
-    if (!task || !goal) {
-      return NextResponse.json({ error: "Goal and task are required." }, { status: 400 });
-    }
-
     const modelPreference =
       process.env.NVIDIA_NIM_VERIFIER_MODEL ||
       process.env.NVIDIA_NIM_MODEL ||
       DEFAULT_VERIFIER_MODEL;
 
-    let verificationDraft = createFallbackVerification(task, decisionIntent);
+    let verificationDraft = createFallbackVerification(
+      parsed.data.task,
+      parsed.data.decisionIntent
+    );
     let source: "llm" | "fallback" = "llm";
     let model = modelPreference;
+    let warnings: string[] = [];
 
     try {
       const completion = await completeWithNim(
-        buildVerificationMessages(goal, task, decisionIntent),
+        buildVerificationMessages(
+          parsed.data.goal,
+          parsed.data.task,
+          parsed.data.decisionIntent
+        ),
         {
           model: modelPreference,
           maxTokens: 450,
@@ -48,12 +64,13 @@ export async function POST(request: Request) {
       );
       verificationDraft = normalizeVerification(
         extractJsonObject(completion.content),
-        decisionIntent
+        parsed.data.decisionIntent
       );
       model = completion.model;
-    } catch {
+    } catch (error) {
       source = "fallback";
       model = "fallback-verifier";
+      warnings = [buildVerifierWarning(error)];
     }
 
     const verification: VerificationRecord = {
@@ -63,14 +80,17 @@ export async function POST(request: Request) {
       generatedAt: new Date().toISOString()
     };
 
-    return NextResponse.json({
-      taskId: task.id,
+    const response: VerifyApiResponse = {
+      taskId: parsed.data.task.id,
       verification,
-      model
-    });
-  } catch (error) {
+      model,
+      warnings
+    };
+
+    return NextResponse.json(response);
+  } catch {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to verify task output." },
+      { error: "Unable to verify task output." },
       { status: 500 }
     );
   }
