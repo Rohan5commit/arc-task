@@ -6,6 +6,8 @@ export interface ChatMessage {
 interface CompletionOptions {
   maxTokens?: number;
   temperature?: number;
+  model?: string;
+  timeoutMs?: number;
 }
 
 interface CompletionResult {
@@ -13,8 +15,19 @@ interface CompletionResult {
   model: string;
 }
 
-const DEFAULT_MODEL = "meta/llama-3.1-405b-instruct";
+const DEFAULT_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
+const DEFAULT_TIMEOUT_MS = 12000;
+const MIN_TIMEOUT_MS = 1500;
+const MAX_TIMEOUT_MS = 30000;
 const NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions";
+
+function clampTimeoutMs(value: number | undefined): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_TIMEOUT_MS;
+  }
+
+  return Math.min(Math.max(Math.round(value as number), MIN_TIMEOUT_MS), MAX_TIMEOUT_MS);
+}
 
 export async function completeWithNim(
   messages: ChatMessage[],
@@ -26,21 +39,38 @@ export async function completeWithNim(
     throw new Error("NVIDIA_NIM_API_KEY is not configured.");
   }
 
-  const model = process.env.NVIDIA_NIM_MODEL || DEFAULT_MODEL;
-  const response = await fetch(NVIDIA_API_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    cache: "no-store",
-    body: JSON.stringify({
-      model,
-      messages,
-      temperature: options.temperature ?? 0.2,
-      max_tokens: options.maxTokens ?? 1200
-    })
-  });
+  const model = options.model?.trim() || process.env.NVIDIA_NIM_MODEL || DEFAULT_MODEL;
+  const timeoutMs = clampTimeoutMs(options.timeoutMs);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+
+  try {
+    response = await fetch(NVIDIA_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      cache: "no-store",
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: options.temperature ?? 0.2,
+        max_tokens: options.maxTokens ?? 1200
+      })
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error(`NVIDIA NIM request timed out after ${timeoutMs}ms.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

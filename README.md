@@ -57,6 +57,7 @@ ArcTask turns those chain properties into a product demo that judges can underst
 - verification note generation
 - structured JSON parsing
 - deterministic fallback mode when live AI is unavailable
+- bounded latency budgets for planner, worker, and verifier routes
 
 ### Payment abstraction
 - demo wallet balances
@@ -122,7 +123,13 @@ Copy `.env.example` and provide:
 
 ```bash
 NVIDIA_NIM_API_KEY=
-NVIDIA_NIM_MODEL=meta/llama-3.1-405b-instruct
+NVIDIA_NIM_MODEL=meta/llama-4-maverick-17b-128e-instruct
+NVIDIA_NIM_PLANNER_MODEL=meta/llama-4-maverick-17b-128e-instruct
+NVIDIA_NIM_WORKER_MODEL=meta/llama-4-maverick-17b-128e-instruct
+NVIDIA_NIM_VERIFIER_MODEL=meta/llama-4-maverick-17b-128e-instruct
+NVIDIA_NIM_PLANNER_TIMEOUT_MS=12000
+NVIDIA_NIM_WORKER_TIMEOUT_MS=8000
+NVIDIA_NIM_VERIFIER_TIMEOUT_MS=7000
 PAYMENT_MODE=demo
 NEXT_PUBLIC_PAYMENT_MODE=demo
 ARC_TESTNET_RPC_URL=https://rpc.testnet.arc.network
@@ -190,5 +197,6 @@ Short version:
 ## Notes
 
 - The app clearly labels AI-generated suggestions.
+- The live AI path is bounded by route-specific latency budgets so the demo falls back quickly instead of hanging on stage.
 - Demo mode is intentional. It makes the product reliable for live judging while preserving a real path to Arc settlement.
 - No secrets should be committed. Configure the NVIDIA key only in Vercel project settings or local env files.

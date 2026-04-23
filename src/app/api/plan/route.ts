@@ -6,6 +6,9 @@ import { buildPlanningMessages } from "@/lib/ai/prompts";
 import type { PaymentMode } from "@/lib/types";
 import { buildWorkspaceFromPlan, sanitizeGoal } from "@/lib/utils/task-helpers";
 
+const DEFAULT_PLANNER_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
+const DEFAULT_PLANNER_TIMEOUT_MS = 12000;
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as { goal?: string };
@@ -22,15 +25,24 @@ export async function POST(request: Request) {
       ? "arc_testnet"
       : "demo") as PaymentMode;
 
+    const modelPreference =
+      process.env.NVIDIA_NIM_PLANNER_MODEL ||
+      process.env.NVIDIA_NIM_MODEL ||
+      DEFAULT_PLANNER_MODEL;
+
     let source: "llm" | "fallback" = "llm";
-    let model = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.1-405b-instruct";
+    let model = modelPreference;
     let warnings: string[] = [];
     let draft = createFallbackPlan(goal);
 
     try {
       const completion = await completeWithNim(buildPlanningMessages(goal), {
-        maxTokens: 1400,
-        temperature: 0.2
+        model: modelPreference,
+        maxTokens: 900,
+        temperature: 0.15,
+        timeoutMs: Number(
+          process.env.NVIDIA_NIM_PLANNER_TIMEOUT_MS ?? DEFAULT_PLANNER_TIMEOUT_MS
+        )
       });
       draft = normalizePlanDraft(extractJsonObject(completion.content), goal);
       model = completion.model;
@@ -40,7 +52,7 @@ export async function POST(request: Request) {
       warnings = [
         error instanceof Error
           ? error.message
-          : "Live planning failed. Returned deterministic fallback workflow."
+          : "Live planning exceeded the latency budget. Returned deterministic fallback workflow."
       ];
     }
 

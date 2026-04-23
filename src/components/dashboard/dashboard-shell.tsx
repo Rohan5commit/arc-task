@@ -78,8 +78,11 @@ export function DashboardShell({ initialWorkspace }: DashboardShellProps) {
       const payload = (await response.json()) as PlanningApiResponse;
       setWorkspace(payload.workspace);
       setGoalDraft(payload.workspace.goal);
+      const warningSuffix = payload.warnings.length
+        ? ` · note: ${payload.warnings[0].slice(0, 120)}`
+        : "";
       setRuntimeLabel(
-        `Planner source: ${payload.source === "llm" ? "live NVIDIA NIM" : "deterministic fallback"} · model: ${payload.model}`
+        `Planner source: ${payload.source === "llm" ? "live NVIDIA NIM" : "deterministic fallback"} · model: ${payload.model}${warningSuffix}`
       );
     } catch (error) {
       setPlanError(error instanceof Error ? error.message : "Planning failed.");

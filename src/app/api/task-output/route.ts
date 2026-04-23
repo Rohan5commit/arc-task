@@ -6,6 +6,9 @@ import { buildTaskOutputMessages } from "@/lib/ai/prompts";
 import type { TaskItem, TaskOutput } from "@/lib/types";
 import { sanitizeGoal } from "@/lib/utils/task-helpers";
 
+const DEFAULT_WORKER_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
+const DEFAULT_WORKER_TIMEOUT_MS = 8000;
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as {
@@ -19,14 +22,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Goal and task are required." }, { status: 400 });
     }
 
+    const modelPreference =
+      process.env.NVIDIA_NIM_WORKER_MODEL ||
+      process.env.NVIDIA_NIM_MODEL ||
+      DEFAULT_WORKER_MODEL;
+
     let outputDraft = createFallbackTaskOutput(goal, task);
     let source: "llm" | "fallback" = "llm";
-    let model = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.1-405b-instruct";
+    let model = modelPreference;
 
     try {
       const completion = await completeWithNim(buildTaskOutputMessages(goal, task), {
-        maxTokens: 900,
-        temperature: 0.3
+        model: modelPreference,
+        maxTokens: 650,
+        temperature: 0.2,
+        timeoutMs: Number(
+          process.env.NVIDIA_NIM_WORKER_TIMEOUT_MS ?? DEFAULT_WORKER_TIMEOUT_MS
+        )
       });
       outputDraft = normalizeTaskOutput(extractJsonObject(completion.content));
       model = completion.model;

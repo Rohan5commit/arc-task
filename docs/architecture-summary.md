@@ -30,7 +30,7 @@ Client-side orchestration for:
 - `POST /api/task-output`: generate a worker output for a task
 - `POST /api/verify`: generate verification notes for approve/reject actions
 
-All routes try live NVIDIA NIM first, then fall back to deterministic local logic.
+All routes try live NVIDIA NIM first, but each route now runs inside a bounded latency budget and falls back to deterministic local logic if the live model is too slow.
 
 ### 4. Payment adapter seam
 `PaymentAdapter` defines the interface for settlement.

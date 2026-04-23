@@ -6,6 +6,9 @@ import { buildVerificationMessages } from "@/lib/ai/prompts";
 import type { TaskItem, VerificationDecision, VerificationRecord } from "@/lib/types";
 import { sanitizeGoal } from "@/lib/utils/task-helpers";
 
+const DEFAULT_VERIFIER_MODEL = "meta/llama-4-maverick-17b-128e-instruct";
+const DEFAULT_VERIFIER_TIMEOUT_MS = 7000;
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as {
@@ -22,16 +25,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Goal and task are required." }, { status: 400 });
     }
 
+    const modelPreference =
+      process.env.NVIDIA_NIM_VERIFIER_MODEL ||
+      process.env.NVIDIA_NIM_MODEL ||
+      DEFAULT_VERIFIER_MODEL;
+
     let verificationDraft = createFallbackVerification(task, decisionIntent);
     let source: "llm" | "fallback" = "llm";
-    let model = process.env.NVIDIA_NIM_MODEL || "meta/llama-3.1-405b-instruct";
+    let model = modelPreference;
 
     try {
       const completion = await completeWithNim(
         buildVerificationMessages(goal, task, decisionIntent),
         {
-          maxTokens: 700,
-          temperature: 0.2
+          model: modelPreference,
+          maxTokens: 450,
+          temperature: 0.15,
+          timeoutMs: Number(
+            process.env.NVIDIA_NIM_VERIFIER_TIMEOUT_MS ?? DEFAULT_VERIFIER_TIMEOUT_MS
+          )
         }
       );
       verificationDraft = normalizeVerification(
